@@ -10,39 +10,38 @@ secret_key = config("SECRET_KEY")
 algorithm = config("ALGORITHM")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 def hash_password(password: str):
     return pwd_context.hash(password)
+
 
 def verify_password(plain_pwd, hashed_pwd):
     return pwd_context.verify(plain_pwd, hashed_pwd)
 
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta 
-                                           or timedelta(minutes=15))
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=15))
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, 
-                      secret_key, 
-                      algorithm=algorithm
-    )
-    
+    return jwt.encode(to_encode, secret_key, algorithm=algorithm)
+
+
 def create_tokens(session: Session, user: User):
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token_str = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     refresh_token = RefreshToken(
-        user_id = user.id, 
-        token = refresh_token_str, 
-        expires_at = expires_at
+        user_id=user.id, token=refresh_token_str, expires_at=expires_at
     )
     session.add(refresh_token)
     session.commit()
     return {
         "access_token": access_token,
         "refresh_token": refresh_token_str,
-        "token_type": "bearer"
+        "token_type": "bearer",
     }
-    
+
+
 def verify_refresh_token(session: Session, token: str):
     stmt = select(RefreshToken).where(RefreshToken.token == token)
     db_token = session.exec(stmt).first()
@@ -51,15 +50,27 @@ def verify_refresh_token(session: Session, token: str):
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
         if expires_at > datetime.now(timezone.utc):
-            stmt = select(User).where(User.id == db_token.user_id)
-            return session.exec(stmt).first()
+            user_stmt = select(User).where(User.id == db_token.user_id)
+            return session.exec(user_stmt).first()
     return None
+
 
 def decode_token(token: str):
     try:
         return jwt.decode(token, secret_key, algorithms=algorithm)
     except JWTError:
         return None
-    
-            
-    
+
+
+def create_email_verification_token(user_id: int):
+    expire = datetime.now(timezone.utc) + timedelta(hours=1)
+    to_encode = {"sub": str(user_id), "type": "verify", "exp": expire}
+    return jwt.encode(to_encode, secret_key, algorithm=algorithm)
+
+
+def verify_token_and_get_user_id(token: str, token_type: str):
+
+    payload = decode_token(token)
+    if not payload or payload.get("type") != token_type:
+        return None
+    return int(payload.get("sub"))

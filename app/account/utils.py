@@ -67,6 +67,11 @@ def create_email_verification_token(user_id: int):
     to_encode = {"sub": str(user_id), "type": "verify", "exp": expire}
     return jwt.encode(to_encode, secret_key, algorithm=algorithm)
 
+def create_password_reset_token(user_id: int):
+    expire = datetime.now(timezone.utc) + timedelta(hours=1)
+    to_encode = {"sub": str(user_id), "type": "password-reset", "exp": expire}
+    return jwt.encode(to_encode, secret_key, algorithm=algorithm)
+
 
 def verify_token_and_get_user_id(token: str, token_type: str):
 
@@ -74,3 +79,17 @@ def verify_token_and_get_user_id(token: str, token_type: str):
     if not payload or payload.get("type") != token_type:
         return None
     return int(payload.get("sub"))
+
+def get_user_by_email(session: Session, email: str):
+    stmt = select(User).where(User.email == email)
+    user = session.exec(stmt).first()
+    return user
+        
+def revoke_refresh_token(session: Session, token: str):
+    stmt = select(RefreshToken).where(RefreshToken.token == token)
+    db_token = session.exec(stmt).first()
+    if db_token:
+        db_token.revoked = True
+        session.commit()
+        
+        

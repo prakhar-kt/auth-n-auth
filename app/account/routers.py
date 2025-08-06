@@ -3,7 +3,8 @@ from app.account.services import (
     create_user,
     authenticate_user,
     process_email_verification,
-    verify_email_token
+    verify_email_token,
+    change_password,
 )
 from app.account.models import UserCreate, UserOut
 from app.db.config import SessionDep
@@ -57,7 +58,15 @@ def me(user=Depends(get_current_user)):
 def send_verification_email(user=Depends(get_current_user)):
     return process_email_verification(user)
 
+
 @router.get("/verify")
 def verify_email(session: SessionDep, token: str):
     return verify_email_token(session, token)
-    
+
+
+@router.post("/change-password")
+def password_change(
+    session: SessionDep, new_password: str, user=Depends(get_current_user)
+):
+    change_password(session, user, new_password)
+    return {"msg": "Password changed succesfully"}
